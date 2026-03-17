@@ -5,8 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { askVakil, chatAgent } from "@/services/ml";
-import { chatRAG } from "@/services/rag";
+import { apiRequest } from "../services/api";
 import { useToast } from "@/hooks/use-toast";
 import AppLayout from "@/components/AppLayout";
 import ReactMarkdown from "react-markdown";
@@ -36,20 +35,65 @@ const ChatWorkspace = () => {
     if (!input.trim() || loading) return;
     const q = input.trim();
     setInput("");
+    
+    // User ka message UI mein add karo
     setMessages((prev) => [...prev, { role: "user", content: q }]);
     setLoading(true);
+    
     try {
-      let answer = "";
+      let answerText = "";
+      
       if (tab === "vakil") {
-        const res: any = await askVakil(q);
-        answer = res.data.answer;
+        // 🚀 VAKIL SAHAB (ML Backend)
+        const res = await apiRequest<any>("/ml/ask-vakil", {
+          method: "POST",
+          body: JSON.stringify({ user_query: q, k: 5 }), // k: 5 bhi bhej diya jaise Postman mein tha
+        });
+        
+        console.log("🟢 VAKIL RESPONSE:", res); 
+        
+        // STRICT PARSING
+        if (res && typeof res.data === 'string') {
+            answerText = res.data;
+        } else if (res?.data?.answer) {
+            answerText = res.data.answer;
+        } else if (res?.answer) {
+            answerText = res.answer;
+        } else {
+            answerText = "Could not parse the response correctly.";
+        }
+        
       } else {
-        const res: any = await chatRAG(q);
-        answer = res.data.answer;
+        // 🚀 RAG ASSISTANT (Multi-Rag Backend)
+        const res = await apiRequest<any>("/rag/chat", {
+          method: "POST",
+          body: JSON.stringify({ message: q }), 
+        });
+        
+        console.log("🟢 RAG RESPONSE:", res);
+        
+        if (res && typeof res.data === 'string') {
+            answerText = res.data;
+        } else if (res?.data?.answer) {
+            answerText = res.data.answer;
+        } else if (res?.answer) {
+            answerText = res.answer;
+        } else {
+            answerText = "Could not parse the response correctly.";
+        }
       }
-      setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
-    } catch {
-      toast({ title: "Error", description: "Failed to get response", variant: "destructive" });
+
+      // AI ka text UI mein add karo
+      setMessages((prev) => [...prev, { role: "assistant", content: answerText }]);
+      
+    } catch (error: any) {
+      console.error("Chat Error:", error);
+      toast({ 
+        title: "Connection Error", 
+        description: "Failed to connect to the AI model. Check console for details.", 
+        variant: "destructive" 
+      });
+      setMessages((prev) => [...prev, { role: "assistant", content: "⚠️ Sorry, I encountered an error connecting to the server." }]);
     } finally {
       setLoading(false);
     }
@@ -86,18 +130,28 @@ const ChatWorkspace = () => {
                     {(t === "vakil" ? vakilMessages : ragMessages).map((msg, i) => (
                       <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}>
                         {msg.role === "assistant" && <div className="h-8 w-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0"><Bot className="h-4 w-4 text-accent" /></div>}
-                        <div className={`max-w-[70%] rounded-2xl px-4 py-3 text-sm ${msg.role === "user" ? "bg-accent text-accent-foreground rounded-br-md" : "bg-muted text-foreground rounded-bl-md"}`}>
+                        
+                        {/* 🚀 FIXED BUBBLE UI HERE */}
+                        <div className={`max-w-[85%] rounded-2xl px-5 py-4 text-sm shadow-sm ${msg.role === "user" ? "bg-accent text-accent-foreground rounded-br-sm ml-auto" : "bg-muted text-foreground rounded-bl-sm mr-auto border border-border/50"}`}>
                           {msg.role === "assistant" ? (
-                            <div className="prose prose-sm max-w-none dark:prose-invert [&_strong]:text-foreground [&_p]:text-foreground/90"><ReactMarkdown>{msg.content}</ReactMarkdown></div>
-                          ) : msg.content}
+                            <div className="prose prose-sm max-w-none break-words whitespace-pre-wrap dark:prose-invert [&_strong]:text-foreground [&_p]:text-foreground/90 [&_p]:last:mb-0 [&_ul]:my-2 [&_li]:my-0">
+                              <ReactMarkdown>{msg.content}</ReactMarkdown>
+                            </div>
+                          ) : (
+                            <div className="break-words whitespace-pre-wrap">{msg.content}</div>
+                          )}
                         </div>
+
                         {msg.role === "user" && <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center shrink-0"><User className="h-4 w-4 text-primary-foreground" /></div>}
                       </motion.div>
                     ))}
                     {loading && tab === t && (
                       <div className="flex gap-3">
                         <div className="h-8 w-8 rounded-full bg-accent/10 flex items-center justify-center"><Bot className="h-4 w-4 text-accent" /></div>
-                        <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-3"><Loader2 className="h-4 w-4 animate-spin text-accent" /></div>
+                        <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-3 flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                          <span className="text-xs text-muted-foreground">Thinking...</span>
+                        </div>
                       </div>
                     )}
                   </div>

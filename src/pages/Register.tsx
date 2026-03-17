@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+// 🚀 Asli API request function import kar rahe hain
+import { apiRequest } from "../services/api"; 
 
 const Register = () => {
   const [name, setName] = useState("");
@@ -14,7 +16,9 @@ const Register = () => {
   const [showOtp, setShowOtp] = useState(false);
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
+  
+  // Humne register ko hata diya context se kyunki hum directly API hit karenge OTP ke sath
+  const { login } = useAuth(); 
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -22,10 +26,17 @@ const Register = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      // Simulate OTP sending
-      await new Promise((r) => setTimeout(r, 800));
+      // 🚀 ASLI /send-otp API CALL
+      await apiRequest("/auth/send-otp", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+      
       setShowOtp(true);
       toast({ title: "OTP Sent!", description: "Check your email for the verification code." });
+    } catch (error) {
+      console.error("OTP Error:", error);
+      toast({ title: "Error", description: "Failed to send OTP. Please try again.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -34,16 +45,31 @@ const Register = () => {
   const handleVerifyOtp = async () => {
     setLoading(true);
     try {
-      await register(email, password, name);
+      // 🚀 ASLI /register API CALL (Fixed Data Mapping)
+      await apiRequest("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ 
+          userName: name,              // Backend expects 'userName', hum 'name' state bhej rahe hain
+          email: email, 
+          password: password, 
+          confirmPassword: password,   // Backend ko confirmPassword chahiye, toh same password pass kar diya
+          otp: otp 
+        }), 
+      });
+
       toast({ title: "Account created!", description: "Welcome to JusticeClear." });
+      
+      // Register hone ke baad automatically login kara do
+      await login(email, password);
+      
       navigate("/dashboard");
-    } catch {
-      toast({ title: "Error", description: "Registration failed", variant: "destructive" });
+    } catch (error) {
+      console.error("Registration Error:", error);
+      toast({ title: "Error", description: "Invalid OTP or registration failed", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
-
   return (
     <div className="min-h-screen flex">
       <motion.div initial={{ x: -40, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.6 }} className="hidden lg:flex lg:w-1/2 bg-primary flex-col items-center justify-center p-12 relative overflow-hidden">

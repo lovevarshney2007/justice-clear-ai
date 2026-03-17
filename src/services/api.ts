@@ -1,5 +1,5 @@
 const BASE_URL = "http://localhost:4000/api/v1";
-const USE_MOCK = true; // Toggle to false when backend is ready
+const USE_MOCK = false; // Toggle to false when backend is ready
 
 export async function apiRequest<T>(
   endpoint: string,

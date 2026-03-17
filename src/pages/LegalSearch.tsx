@@ -4,9 +4,12 @@ import { Search as SearchIcon, ExternalLink, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { searchLegal } from "@/services/ml";
 import { useToast } from "@/hooks/use-toast";
 import AppLayout from "@/components/AppLayout";
+import ReactMarkdown from "react-markdown";
+
+// 🚀 YE IMPORT MISSING THA! Isko add kar diya hai
+import { apiRequest } from "../services/api";
 
 const LegalSearch = () => {
   const [query, setQuery] = useState("");
@@ -17,13 +20,39 @@ const LegalSearch = () => {
   const handleSearch = async () => {
     if (!query.trim()) return;
     setLoading(true);
-    setResults([]);
+    setResults([]); // Reset previous results
+    
     try {
-      const res: any = await searchLegal(query);
-      setResults(res.data);
-      toast({ title: "Search complete", description: `${res.data.length} results found` });
-    } catch {
-      toast({ title: "Error", description: "Search failed", variant: "destructive" });
+      // 🚀 Method GET kar diya aur query parameter url mein bhej diya
+      const res = await apiRequest<any>(`/ml/search?query=${encodeURIComponent(query)}`, {
+        method: "GET",
+      });
+
+      // Data Extraction: Dhoondho data kahan chhupa hai
+      let searchData = res?.data?.data || res?.data || res?.results || res;
+
+      let formattedResults: any[] = [];
+
+      // 🛡️ SMART ARRAY CHECKER
+      if (Array.isArray(searchData)) {
+        // Agar pehle se array hai
+        formattedResults = searchData;
+      } else if (typeof searchData === 'string') {
+        // Agar backend ne sirf ek lamba answer bheja hai
+        formattedResults = [{ title: "Legal Insight", description: searchData }];
+      } else if (typeof searchData === 'object' && searchData !== null) {
+        // Agar object ke andar answer hai
+        const text = searchData.answer || searchData.content || searchData.text || JSON.stringify(searchData);
+        formattedResults = [{ title: "Search Result", description: text }];
+      }
+
+      setResults(formattedResults);
+      toast({ title: "Search complete", description: `${formattedResults.length} result(s) found` });
+      
+    } catch (error) {
+      console.error("Search Error:", error);
+      toast({ title: "Error", description: "Search failed. Check console for details.", variant: "destructive" });
+      setResults([]); // Crash se bachne ke liye khali array set karo
     } finally {
       setLoading(false);
     }
@@ -57,16 +86,22 @@ const LegalSearch = () => {
           {loading && [1,2,3].map(i => (
             <Card key={i} className="border-border"><CardContent className="p-6"><div className="space-y-3"><div className="h-5 w-1/3 bg-muted rounded animate-pulse" /><div className="h-4 w-2/3 bg-muted rounded animate-pulse" /></div></CardContent></Card>
           ))}
+          
+          {/* Safe Map Function */}
           {results.map((r, i) => (
             <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }}>
               <Card className="border-border hover:border-accent/30 transition-colors cursor-pointer group">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-semibold text-foreground group-hover:text-accent transition-colors">{r.title}</h3>
-                      <p className="text-sm text-muted-foreground mt-1">{r.description}</p>
+                    <div className="w-full">
+                      <h3 className="font-semibold text-foreground group-hover:text-accent transition-colors">{r.title || "Legal Reference"}</h3>
+                      
+                      {/* Markdown rendering taaki answer badiya dikhe */}
+                      <div className="text-sm text-muted-foreground mt-2 prose prose-sm dark:prose-invert max-w-none break-words whitespace-pre-wrap">
+                        <ReactMarkdown>{r.description || r.content || r.text || ""}</ReactMarkdown>
+                      </div>
                     </div>
-                    <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0 mt-1 group-hover:text-accent transition-colors" />
+                    <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0 mt-1 ml-4 group-hover:text-accent transition-colors" />
                   </div>
                 </CardContent>
               </Card>

@@ -4,10 +4,12 @@ import { Globe, LinkIcon, Clock, FileText, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { summarizeWeb } from "@/services/rag";
 import { useToast } from "@/hooks/use-toast";
 import AppLayout from "@/components/AppLayout";
 import ReactMarkdown from "react-markdown";
+
+// 🚀 Asli API import
+import { apiRequest } from "../services/api";
 
 const WebSummarizer = () => {
   const [url, setUrl] = useState("");
@@ -20,11 +22,30 @@ const WebSummarizer = () => {
     setLoading(true);
     setResult(null);
     try {
-      const res: any = await summarizeWeb(url);
-      setResult(res.data);
+      // 🚀 Asli Backend API call
+      const res = await apiRequest<any>("/rag/summarize-web", {
+        method: "POST",
+        body: JSON.stringify({ url }),
+      });
+
+      // Postman ke hisaab se text 'res.data.data' ke andar hai
+      const summaryText = res?.data?.data || res?.data || res?.answer || "No summary generated.";
+
+      // Frontend UI ke liye automatically words aur time calculate karo
+      const wordCount = summaryText.split(/\s+/).filter((w: string) => w.length > 0).length;
+      const readingTime = Math.max(1, Math.ceil(wordCount / 200)) + " min read";
+
+      // Result ko UI ke format mein set karo
+      setResult({
+        summary: summaryText,
+        word_count: wordCount,
+        reading_time: readingTime
+      });
+
       toast({ title: "Summary ready!", description: "Article has been summarized." });
-    } catch {
-      toast({ title: "Error", description: "Failed to summarize", variant: "destructive" });
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Failed to summarize. Check console.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -45,7 +66,7 @@ const WebSummarizer = () => {
             <div className="flex gap-3">
               <div className="relative flex-1">
                 <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSummarize()} placeholder="https://example.com/legal-article..." className="pl-10 h-12 text-base" />
+                <Input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSummarize()} placeholder="https://www.law.cornell.edu/wex/affidavit" className="pl-10 h-12 text-base" />
               </div>
               <Button onClick={handleSummarize} disabled={loading || !url.trim()} className="bg-accent text-accent-foreground hover:bg-gold-light h-12 px-8">
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Summarize"}
@@ -83,7 +104,8 @@ const WebSummarizer = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="prose prose-sm max-w-none dark:prose-invert">
+                {/* 🚀 FIXED BUBBLE UI FOR PROPER RENDERING */}
+                <div className="prose prose-sm max-w-none dark:prose-invert break-words whitespace-pre-wrap [&_strong]:text-foreground [&_p]:text-foreground/90 [&_h3]:text-foreground [&_h4]:text-foreground">
                   <ReactMarkdown>{result.summary}</ReactMarkdown>
                 </div>
               </CardContent>

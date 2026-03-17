@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+// Humari api request function ko import kar rahe hain
+import { apiRequest } from "../services/api"; 
 
 interface User {
   email: string;
@@ -28,6 +30,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // App load hote time localStorage se asli token read karega
   useEffect(() => {
     const saved = localStorage.getItem("jc_token");
     const savedUser = localStorage.getItem("jc_user");
@@ -38,28 +41,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   }, []);
 
-  const login = useCallback(async (email: string, _password: string) => {
-    // Mock login
-    await new Promise((r) => setTimeout(r, 1000));
-    const mockToken = "mock-jwt-token-" + Date.now();
-    const mockUser = { email, name: email.split("@")[0] };
-    setToken(mockToken);
-    setUser(mockUser);
-    localStorage.setItem("jc_token", mockToken);
-    localStorage.setItem("jc_user", JSON.stringify(mockUser));
+  // 🚀 ASLI LOGIN API CALL
+  const login = useCallback(async (email: string, password: string) => {
+    try {
+      const response = await apiRequest<any>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+
+      // Backend se aane wale data ke hisaab se token aur user nikalein
+      // (Agar backend ka structure thoda alag hai, toh aapko response.data check karna padega)
+      const actualToken = response.data?.accessToken || response.accessToken; 
+      const actualUser = response.data?.user || response.user || { email, name: email.split("@")[0] };
+
+      if (!actualToken) {
+         throw new Error("Login failed: No token received from server");
+      }
+
+      setToken(actualToken);
+      setUser(actualUser);
+      localStorage.setItem("jc_token", actualToken);
+      localStorage.setItem("jc_user", JSON.stringify(actualUser));
+      
+    } catch (error) {
+      console.error("Real Login Error:", error);
+      throw error; // UI ko error dikhane ke liye aage throw karein
+    }
   }, []);
 
-  const register = useCallback(async (email: string, _password: string, name: string) => {
-    await new Promise((r) => setTimeout(r, 1000));
-    const mockToken = "mock-jwt-token-" + Date.now();
-    const mockUser = { email, name };
-    setToken(mockToken);
-    setUser(mockUser);
-    localStorage.setItem("jc_token", mockToken);
-    localStorage.setItem("jc_user", JSON.stringify(mockUser));
+  // 🚀 ASLI REGISTER API CALL
+  const register = useCallback(async (email: string, password: string, name: string) => {
+    try {
+      // Backend par Signup ki request
+      const response = await apiRequest<any>("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ email, password, fullName: name }), // Note: Aapke backend mein shyd 'fullName' use ho raha ho
+      });
+
+      // Agar signup successful hai, toh automatically login kara dein (Optional)
+      // Ya fir hum user ko login page par bhej sakte hain.
+      // Abhi ke liye hum token store kar lete hain agar backend bhejta hai:
+      const actualToken = response.data?.accessToken || response.accessToken;
+      const actualUser = response.data?.user || response.user || { email, name };
+
+      if (actualToken) {
+        setToken(actualToken);
+        setUser(actualUser);
+        localStorage.setItem("jc_token", actualToken);
+        localStorage.setItem("jc_user", JSON.stringify(actualUser));
+      }
+    } catch (error) {
+      console.error("Real Register Error:", error);
+      throw error;
+    }
   }, []);
 
   const logout = useCallback(() => {
+    // Agar backend par `/auth/logout` call karni hai toh yahan kar sakte hain
+    // apiRequest("/auth/logout", { method: "POST" }).catch(console.error);
+    
     setToken(null);
     setUser(null);
     localStorage.removeItem("jc_token");

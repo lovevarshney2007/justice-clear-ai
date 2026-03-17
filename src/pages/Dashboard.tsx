@@ -26,11 +26,25 @@ const Dashboard = () => {
   const [health, setHealth] = useState<string | null>(null);
   const [chatStatus, setChatStatus] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
-
-  useEffect(() => {
+useEffect(() => {
     getHealth().then((r: any) => setHealth(r.message));
     getChatStatus().then((r: any) => setChatStatus(r));
-    getHistory().then((r: any) => setHistory(r.data));
+    getHistory().then((r: any) => {
+      // 🚀 FIX: Backend ke data ko Frontend ke variables ke sath map karo aur 'failed' ko hata do
+      const rawHistory = r.data || r;
+      
+      const formattedHistory = (Array.isArray(rawHistory) ? rawHistory : [])
+        .filter((doc: any) => doc.status !== 'failed') // Failed documents ko hide kar diya
+        .map((doc: any) => ({
+          ...doc,
+          filename: doc.originalFileName || doc.filename || "Untitled Document", // Naya naam
+          date: new Date(doc.createdAt || doc.date || Date.now()).toLocaleDateString(), // Readable date format
+          status: doc.status === 'completed' ? 'Processed' : doc.status,
+          risk_level: doc.risk_level || "Analyzed"
+        }));
+        
+      setHistory(formattedHistory);
+    });
   }, []);
 
   return (
